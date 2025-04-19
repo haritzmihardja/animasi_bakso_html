@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Animasi Abang Bakso 3D</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #181818; overflow: hidden; }
+    #overlay {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none; z-index: 2;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .teks-animasi {
+      position: absolute; width: 100vw; text-align: center;
+      color: #ffd700; font-size: 2.5vw; font-weight: bold;
+      text-shadow: 0 2px 16px #000, 0 0 40px #ffd70077;
+      opacity: 0;
+    }
+    .teks-animasi.closing { top: 60vh; color: #fff; font-size: 2vw; }
+    .teks-animasi.logo { top: 40vh; color: #ffd700; font-size: 3vw; text-shadow: 0 2px 32px #000, 0 0 80px #ffd700cc; }
+    .partikel { position: absolute; border-radius: 50%; pointer-events: none; opacity: 0.85; z-index: 1; }
+  </style>
+</head>
+<body>
+  <canvas id="scene3d"></canvas>
+  <div id="overlay">
+    <div class="teks-animasi closing" id="teksClosing">Bakso ini terlalu sayang untuk dilewatkan!</div>
+    <div class="teks-animasi logo" id="teksLogo">BAKSO HYPNO</div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    // --- Setup scene ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x181818);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('scene3d'), alpha: true, antialias: true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.position.set(0, 2, 10);
+
+    // --- Lighting ---
+    const light = new THREE.PointLight(0xfff8dc, 1.2, 100);
+    light.position.set(10, 15, 10);
+    scene.add(light);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+    scene.add(ambient);
+
+    // --- Gerobak ---
+    const cartGeo = new THREE.BoxGeometry(6, 2, 2);
+    const cartMat = new THREE.MeshStandardMaterial({color:0x6d4c2b});
+    const cart = new THREE.Mesh(cartGeo, cartMat);
+    cart.position.set(0, 1, -3);
+    scene.add(cart);
+    // Roda
+    for(let i=0;i<2;i++){
+      const roda = new THREE.Mesh(new THREE.TorusGeometry(0.5,0.18,16,32),new THREE.MeshStandardMaterial({color:0x222}));
+      roda.position.set(i===0?-2.5:2.5,0.25,-3.8);
+      roda.rotation.x = Math.PI/2;
+      scene.add(roda);
+    }
+
+    // --- Abang Bakso (sederhana humanoid) ---
+    const groupAbang = new THREE.Group();
+    // Badan
+    const badan = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.7,1.7,24), new THREE.MeshStandardMaterial({color:0x2e5d9f}));
+    badan.position.y = 2.1;
+    groupAbang.add(badan);
+    // Kepala
+    const kepala = new THREE.Mesh(new THREE.SphereGeometry(0.45,32,32), new THREE.MeshStandardMaterial({color:0xffe0b0}));
+    kepala.position.y = 3.2;
+    groupAbang.add(kepala);
+    // Tangan kanan
+    const tanganKanan = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.9,16), new THREE.MeshStandardMaterial({color:0xffe0b0}));
+    tanganKanan.position.set(0.45,2.5,0);
+    tanganKanan.rotation.z = -0.5;
+    groupAbang.add(tanganKanan);
+    // Tangan kiri
+    const tanganKiri = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.9,16), new THREE.MeshStandardMaterial({color:0xffe0b0}));
+    tanganKiri.position.set(-0.45,2.5,0);
+    tanganKiri.rotation.z = 0.5;
+    groupAbang.add(tanganKiri);
+    // Topi
+    const topi = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.18,24), new THREE.MeshStandardMaterial({color:0x333}));
+    topi.position.set(0,3.7,0);
+    groupAbang.add(topi);
+    // Letak abang di belakang gerobak
+    groupAbang.position.set(0,0,-2.2);
+    scene.add(groupAbang);
+
+    // --- Meja dan Mangkuk ---
+    const meja = new THREE.Mesh(new THREE.BoxGeometry(3.5,0.2,1.2), new THREE.MeshStandardMaterial({color:0xc2a060}));
+    meja.position.set(0,0.8,0.8);
+    scene.add(meja);
+    // Mangkuk
+    const mangkuk = new THREE.Mesh(new THREE.CylinderGeometry(0.7,1,0.5,32,1,true), new THREE.MeshStandardMaterial({color:0xf5f5f5,side:THREE.DoubleSide,transparent:true,opacity:0.92}));
+    mangkuk.position.set(0,1.1,1.1);
+    scene.add(mangkuk);
+
+    // --- Isi Mangkuk (bakso, mie, tahu, sayur) ---
+    const isiMangkuk = [];
+    function addBakso(yOffset=0) {
+  // Bakso dengan tekstur permukaan dan highlight minyak
+  const geo = new THREE.SphereGeometry(0.23, 48, 48);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  // Base warna bakso
+  for (let y = 0; y < 128; y++) {
+    for (let x = 0; x < 128; x++) {
+      let noise = Math.floor(Math.random() * 28);
+      let val = 180 + noise;
+      ctx.fillStyle = `rgb(${val},${val-23},${val-33})`;
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  // Highlight minyak
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath();
+  ctx.ellipse(80, 38, 28, 16, 0, 0, 2*Math.PI);
+  ctx.fillStyle = '#fffbe8';
+  ctx.fill();
+  ctx.globalAlpha = 1.0;
+  // Bump: urat daging
+  ctx.strokeStyle = '#d0b08077';
+  ctx.lineWidth = 1.2;
+  for(let i=0;i<9;i++){
+    ctx.beginPath();
+    ctx.arc(64+Math.random()*24-12,64+Math.random()*24-12,Math.random()*24+10,Math.random(),Math.PI*2);
+    ctx.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.MeshPhysicalMaterial({
+    map: texture,
+    roughness: 0.22,
+    metalness: 0.18,
+    clearcoat: 0.33,
+    clearcoatRoughness: 0.10,
+    reflectivity: 0.16,
+    sheen: 0.19,
+    color: 0xb6a47a
+  });
+  const bakso = new THREE.Mesh(geo, mat);
+  bakso.position.set(0,1.23+yOffset,1.1+Math.random()*0.13-0.06);
+  scene.add(bakso);
+  isiMangkuk.push(bakso);
+  // Topping: taburan bawang goreng dan seledri
+  for(let i=0;i<4;i++){
+    const bawang = new THREE.Mesh(new THREE.SphereGeometry(0.025,8,8), new THREE.MeshStandardMaterial({color:0xffe7a2, roughness:0.3, metalness:0.1}));
+    bawang.position.set(
+      bakso.position.x + (Math.random()-0.5)*0.18,
+      bakso.position.y + 0.13 + Math.random()*0.03,
+      bakso.position.z + (Math.random()-0.5)*0.18
+    );
+    scene.add(bawang);
+    isiMangkuk.push(bawang);
+  }
+  for(let i=0;i<3;i++){
+    const seledri = new THREE.Mesh(new THREE.SphereGeometry(0.018,8,8), new THREE.MeshStandardMaterial({color:0x44ff99, roughness:0.3, metalness:0.1}));
+    seledri.position.set(
+      bakso.position.x + (Math.random()-0.5)*0.18,
+      bakso.position.y + 0.13 + Math.random()*0.03,
+      bakso.position.z + (Math.random()-0.5)*0.18
+    );
+    scene.add(seledri);
+    isiMangkuk.push(seledri);
+  }
+}
+    function addMie() {
+      const mie = new THREE.Mesh(new THREE.TorusGeometry(0.32,0.07,12,24,Math.PI*1.25), new THREE.MeshStandardMaterial({color:0xfceabb}));
+      mie.position.set(0.1,1.18,1.1);
+      mie.rotation.x = Math.PI/2.5;
+      scene.add(mie);
+      isiMangkuk.push(mie);
+    }
+    function addTahu() {
+      const tahu = new THREE.Mesh(new THREE.BoxGeometry(0.32,0.15,0.22), new THREE.MeshStandardMaterial({color:0xf5e1a4}));
+      tahu.position.set(-0.18,1.21,1.08);
+      scene.add(tahu);
+      isiMangkuk.push(tahu);
+    }
+    function addSayur() {
+      const sayur = new THREE.Mesh(new THREE.ConeGeometry(0.18,0.22,16), new THREE.MeshStandardMaterial({color:0x44ff99}));
+      sayur.position.set(0.19,1.22,1.18);
+      sayur.rotation.x = -0.3;
+      scene.add(sayur);
+      isiMangkuk.push(sayur);
+    }
+    // Kuah (cairan tipis) dengan efek minyak
+const kuahCanvas = document.createElement('canvas');
+kuahCanvas.width = kuahCanvas.height = 128;
+const kctx = kuahCanvas.getContext('2d');
+// Base kuah
+kctx.fillStyle = '#fff0c2';
+kctx.fillRect(0,0,128,128);
+// Efek minyak bulat
+for(let i=0;i<16;i++){
+  kctx.globalAlpha = 0.24 + Math.random()*0.13;
+  kctx.beginPath();
+  kctx.arc(20+Math.random()*88, 20+Math.random()*88, 7+Math.random()*11, 0, 2*Math.PI);
+  kctx.fillStyle = '#ffd700';
+  kctx.fill();
+}
+kctx.globalAlpha = 1.0;
+const kuahTex = new THREE.CanvasTexture(kuahCanvas);
+const kuah = new THREE.Mesh(new THREE.CylinderGeometry(0.68,0.98,0.08,32), new THREE.MeshStandardMaterial({map:kuahTex, color:0xfff0c2, transparent:true, opacity:0.93}));
+kuah.position.set(0,1.15,1.1);
+kuah.visible = false;
+scene.add(kuah);
+
+    // --- Animasi Timeline ---
+    function animasiPenyajian() {
+      // Step 1: Kamera ke abang bakso (0-3s)
+      gsap.to(camera.position, {x:0, y:2, z:7, duration:2.5, ease:'power2.inOut'});
+      // Step 2: Abang menyapa (3-6s)
+      setTimeout(()=>{
+        gsap.to(groupAbang.rotation, {y:0.25, duration:0.8, yoyo:true, repeat:1, ease:'power1.inOut'});
+      }, 3000);
+      // Step 3: Tangan kanan ambil mangkuk (6-8s)
+      setTimeout(()=>{
+        gsap.to(tanganKanan.rotation, {z:-1.1, duration:0.7, yoyo:true, repeat:1, ease:'power1.inOut'});
+      }, 6000);
+      // Step 4: Kamera ke atas mangkuk (8-10s)
+      setTimeout(()=>{
+        gsap.to(camera.position, {x:0, y:1.8, z:2.6, duration:1.3, ease:'power2.inOut'});
+      }, 8000);
+      // Step 5: Isi bakso satu per satu (10-16s)
+      setTimeout(()=>{addBakso(0.05);}, 10000);
+      setTimeout(()=>{addBakso(-0.07);}, 11400);
+      setTimeout(()=>{addBakso(0.12);}, 12800);
+      // Step 6: Tambah mie (16s), tahu (17s), sayur (18s)
+      setTimeout(()=>{addMie();}, 16000);
+      setTimeout(()=>{addTahu();}, 17000);
+      setTimeout(()=>{addSayur();}, 18000);
+      // Step 7: Tuang kuah (19s)
+      setTimeout(()=>{kuah.visible=true;}, 19000);
+      // Step 8: Efek asap (20-24s)
+      setTimeout(()=>{asapAktif=true;}, 20000);
+      setTimeout(()=>{asapAktif=false;}, 24000);
+      // Step 9: Kamera close-up (25-31s)
+      setTimeout(()=>{
+        gsap.to(camera.position, {x:0, y:1.3, z:1.3, duration:2.5, ease:'power2.inOut'});
+      }, 25000);
+      // Step 10: Ajakan & logo (32-45s)
+      setTimeout(()=>{showText('#teksClosing',1);}, 32000);
+      setTimeout(()=>{showText('#teksLogo',1);}, 37000);
+      setTimeout(()=>{spawnPartikel('#ffd700', 50, 50, 40);}, 38000);
+      setTimeout(()=>{spawnPartikel('#ff4444', 54, 52, 30);}, 39000);
+      setTimeout(()=>{spawnPartikel('#44ff99', 46, 50, 25);}, 40000);
+      setTimeout(()=>{hideText('#teksClosing',1);}, 43000);
+      setTimeout(()=>{hideText('#teksLogo',1);}, 44500);
+    }
+
+    // Efek asap sederhana
+    let asapAktif = false;
+    function drawAsap() {
+      if(!asapAktif) return;
+      for(let i=0;i<5;i++) {
+        spawnPartikel('rgba(255,255,255,0.5)', 48+Math.random()*4, 42+Math.random()*3, 18+Math.random()*10);
+      }
+      setTimeout(drawAsap, 350);
+    }
+    // Partikel rasa
+    function spawnPartikel(color, x, y, size) {
+      const p = document.createElement('div');
+      p.className = 'partikel';
+      p.style.background = `radial-gradient(circle at 40% 30%, #fff8, ${color} 80%)`;
+      p.style.boxShadow = `0 0 16px 4px ${color}66, 0 0 40px 16px ${color}22`;
+      p.style.width = p.style.height = size + 'px';
+      p.style.left = x + 'vw';
+      p.style.top = y + 'vh';
+      document.body.appendChild(p);
+      gsap.to(p, {
+        x: (Math.random()-0.5)*150,
+        y: (Math.random()-0.5)*80,
+        scale: 0.5+Math.random(),
+        opacity: 0,
+        duration: 1.6 + Math.random()*1.1,
+        ease: 'power1.in',
+        onComplete: ()=>p.remove()
+      });
+    }
+    // GSAP teks
+    function showText(id, dur=1, delay=0) {
+      gsap.fromTo(id, { opacity: 0, scale: 0.7, filter:'blur(8px)' }, { opacity: 1, scale: 1, filter:'blur(0px)', duration: dur, delay, ease: 'power3.out' });
+    }
+    function hideText(id, dur=1, delay=0) {
+      gsap.to(id, { opacity: 0, scale: 1.13, filter:'blur(10px)', duration: dur, delay, ease: 'power2.in' });
+    }
+
+    // Responsive
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Animasi utama
+    animasiPenyajian();
+    setTimeout(drawAsap, 20000);
+    // Render loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

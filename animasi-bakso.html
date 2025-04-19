@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Iklan Bakso Premium 3D</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #181818; overflow: hidden; }
+    #overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      pointer-events: none;
+      z-index: 2;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .teks-animasi {
+      position: absolute;
+      width: 100vw;
+      text-align: center;
+      color: #ffd700;
+      font-size: 2.5vw;
+      font-weight: bold;
+      text-shadow: 0 2px 16px #000, 0 0 40px #ffd70077;
+      opacity: 0;
+    }
+    .teks-animasi.satu { top: 20vh; }
+    .teks-animasi.dua { top: 60vh; color: #fff; font-size: 2vw; }
+    .teks-animasi.tiga { top: 70vh; color: #ff4444; }
+    .teks-animasi.logo { top: 40vh; color: #ffd700; font-size: 3vw; text-shadow: 0 2px 32px #000, 0 0 80px #ffd700cc; }
+    .partikel {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      opacity: 0.85;
+      z-index: 1;
+    }
+    /* Fade overlay untuk transisi antar scene */
+    #fade {
+      position: fixed; left:0; top:0; width:100vw; height:100vh;
+      background: #181818;
+      opacity: 0;
+      z-index: 99;
+      pointer-events: none;
+      transition: opacity 1.2s;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="bakso3d"></canvas>
+  <div id="overlay">
+    <div class="teks-animasi satu" id="teks1">Ada kenikmatan yang tak bisa dijelaskan...</div>
+    <div class="teks-animasi dua" id="teks2">Setiap gigitan, sensasi tak terlupakan.</div>
+    <div class="teks-animasi tiga" id="teks3">Bakso ini terlalu sayang untuk dilewatkan.</div>
+    <div class="teks-animasi logo" id="teksLogo">BAKSO HYPNO</div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    // Three.js 3D Bakso
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bakso3d'), alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Buat bakso (bola dengan tekstur noise sederhana)
+    // Bakso geometry lebih realistis
+const geometry = new THREE.SphereGeometry(2, 128, 128);
+const textureCanvas = document.createElement('canvas');
+textureCanvas.width = textureCanvas.height = 256;
+const ctx = textureCanvas.getContext('2d');
+for (let y = 0; y < 256; y++) {
+  for (let x = 0; x < 256; x++) {
+    let noise = Math.floor(Math.random() * 50);
+    let val = 180 + noise;
+    ctx.fillStyle = `rgb(${val},${val-30},${val-55})`;
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+// highlight
+ctx.globalAlpha = 0.2;
+ctx.beginPath();
+ctx.arc(180, 80, 50, 0, 2*Math.PI);
+ctx.fillStyle = '#fff';
+ctx.fill();
+ctx.globalAlpha = 1.0;
+const texture = new THREE.CanvasTexture(textureCanvas);
+const material = new THREE.MeshPhysicalMaterial({
+  map: texture,
+  roughness: 0.25,
+  metalness: 0.25,
+  clearcoat: 0.6,
+  clearcoatRoughness: 0.12,
+  reflectivity: 0.5,
+  sheen: 0.25,
+  color: 0xc2a060
+});
+const bakso = new THREE.Mesh(geometry, material);
+bakso.castShadow = true;
+scene.add(bakso);
+
+// Tambahkan piring dan kuah
+const plateGeo = new THREE.CylinderGeometry(2.7, 2.7, 0.2, 64);
+const plateMat = new THREE.MeshPhysicalMaterial({color:0xf5f5f5, roughness:0.4, metalness:0.1});
+const plate = new THREE.Mesh(plateGeo, plateMat);
+plate.position.y = -2.05;
+plate.receiveShadow = true;
+scene.add(plate);
+const soupGeo = new THREE.CylinderGeometry(2.5, 2.5, 0.08, 64);
+const soupMat = new THREE.MeshPhysicalMaterial({color:0xfff0c2, roughness:0.2, metalness:0.05, transparent:true, opacity:0.93});
+const soup = new THREE.Mesh(soupGeo, soupMat);
+soup.position.y = -2.0;
+scene.add(soup);
+
+    // Lighting
+    const light1 = new THREE.PointLight(0xfff8dc, 1.2, 100);
+    light1.position.set(10, 10, 10);
+    scene.add(light1);
+    const light2 = new THREE.PointLight(0xffd700, 0.5, 100);
+    light2.position.set(-10, -10, 10);
+    scene.add(light2);
+
+    camera.position.z = 8;
+
+    // Asap efek volumetric lebih smooth
+    const smokeParticles = [];
+    for(let i=0;i<32;i++){
+      const geo = new THREE.SphereGeometry(0.3 + Math.random()*0.7, 24, 24);
+      const mat = new THREE.MeshStandardMaterial({color:0xffffff, transparent:true, opacity:0.11+Math.random()*0.07});
+      const smoke = new THREE.Mesh(geo, mat);
+      smoke.position.set(
+        (Math.random()-0.5)*2.5,
+        2.3 + Math.random()*1.7,
+        (Math.random()-0.5)*2.5
+      );
+      scene.add(smoke);
+      smokeParticles.push(smoke);
+    }
+    // Efek kuah shimmer
+    let shimmerAngle = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      bakso.rotation.y += 0.011;
+      bakso.rotation.x += 0.0025;
+      // Efek glossy highlight bergerak
+      bakso.material.sheen = 0.28 + 0.1*Math.sin(Date.now()/1200);
+      // Asap
+      smokeParticles.forEach((s, i) => {
+        s.position.x += Math.sin(Date.now()/1000 + i)*0.0007;
+        s.position.z += Math.cos(Date.now()/1000 + i)*0.0007;
+        s.position.y += Math.sin(Date.now()/1400 + i)*0.0003;
+        s.material.opacity = 0.13 + 0.07*Math.sin(Date.now()/900 + i);
+      });
+      // Efek shimmer di kuah
+      shimmerAngle += 0.03;
+      soup.material.opacity = 0.92 + 0.04*Math.sin(shimmerAngle);
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Responsive
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // GSAP Animasi Teks & Partikel
+    function showText(id, dur=1, delay=0) {
+      gsap.fromTo(id, { opacity: 0, scale: 0.7, filter:'blur(8px)' }, { opacity: 1, scale: 1, filter:'blur(0px)', duration: dur, delay, ease: 'power3.out' });
+    }
+    function hideText(id, dur=1, delay=0) {
+      gsap.to(id, { opacity: 0, scale: 1.13, filter:'blur(10px)', duration: dur, delay, ease: 'power2.in' });
+    }
+
+    // Partikel rasa
+    function spawnPartikel(color, x, y, size) {
+      const p = document.createElement('div');
+      p.className = 'partikel';
+      p.style.background = `radial-gradient(circle at 40% 30%, #fff8, ${color} 80%)`;
+      p.style.boxShadow = `0 0 16px 4px ${color}66, 0 0 40px 16px ${color}22`;
+      p.style.width = p.style.height = size + 'px';
+      p.style.left = x + 'vw';
+      p.style.top = y + 'vh';
+      document.body.appendChild(p);
+      gsap.to(p, {
+        x: (Math.random()-0.5)*220,
+        y: (Math.random()-0.5)*120,
+        scale: 0.5+Math.random(),
+        opacity: 0,
+        duration: 1.8 + Math.random()*1.2,
+        ease: 'power1.in',
+        onComplete: ()=>p.remove()
+      });
+    }
+
+    // Subliminal message (teks cepat)
+    function subliminal(msg, duration=0.18) {
+      const el = document.createElement('div');
+      el.className = 'teks-animasi';
+      el.style.top = '50vh';
+      el.style.fontSize = '2vw';
+      el.style.color = '#fff';
+      el.style.opacity = 0.85;
+      el.innerText = msg;
+      el.style.zIndex = 10;
+      el.style.filter = 'blur(2px)';
+      document.body.appendChild(el);
+      gsap.fromTo(el, { opacity: 0, scale: 1.2, filter:'blur(8px)' }, { opacity: 0.85, scale: 1, filter:'blur(0px)', duration: 0.08 });
+      setTimeout(() => {
+        gsap.to(el, { opacity: 0, scale:1.3, filter:'blur(8px)', duration: 0.07, onComplete: ()=>el.remove() });
+      }, duration*1000);
+    }
+
+    // Timeline animasi 70 detik
+    setTimeout(()=>showText('#teks1',1), 400); // 0s
+    setTimeout(()=>hideText('#teks1',1), 5000); // 5s
+
+    // Partikel rasa muncul bertahap
+    for(let t=6000; t<15000; t+=500) {
+      setTimeout(()=>{
+        spawnPartikel('#ffd700', 48+Math.random()*4, 48+Math.random()*4, 20+Math.random()*30);
+        spawnPartikel('#ff4444', 52+Math.random()*4, 52+Math.random()*4, 15+Math.random()*25);
+        spawnPartikel('#44ff99', 50+Math.random()*6, 50+Math.random()*6, 10+Math.random()*20);
+      }, t);
+    }
+
+    setTimeout(()=>showText('#teks2',1), 12000); // 12s
+    setTimeout(()=>hideText('#teks2',1), 18000); // 18s
+
+    // Karakter 3D tidak divisualkan, diganti efek partikel & spiral
+    // Spiral hipnotis
+    function spiralEffect() {
+      const spiral = document.createElement('canvas');
+      spiral.width = spiral.height = 400;
+      spiral.style.position = 'absolute';
+      spiral.style.left = 'calc(50vw - 200px)';
+      spiral.style.top = 'calc(50vh - 200px)';
+      spiral.style.zIndex = 5;
+      spiral.style.pointerEvents = 'none';
+      document.body.appendChild(spiral);
+      const ctx = spiral.getContext('2d');
+      let angle = 0;
+      function drawSpiral() {
+        ctx.clearRect(0,0,400,400);
+        ctx.save();
+        ctx.translate(200,200);
+        ctx.rotate(angle);
+        ctx.beginPath();
+        for(let t=0;t<Math.PI*8;t+=0.04){
+          let r = 12 + t*17;
+          let x = Math.cos(t)*r;
+          let y = Math.sin(t)*r;
+          ctx.lineTo(x,y);
+        }
+        const grad = ctx.createLinearGradient(0,0,400,400);
+        grad.addColorStop(0,'#ffd700cc');
+        grad.addColorStop(1,'#ff444488');
+        ctx.strokeStyle = grad;
+        ctx.shadowColor = '#ffd700';
+        ctx.shadowBlur = 24;
+        ctx.lineWidth = 7;
+        ctx.stroke();
+        ctx.restore();
+        angle += 0.012;
+        if(angle < Math.PI*2*2) requestAnimationFrame(drawSpiral);
+        else spiral.remove();
+      }
+      drawSpiral();
+    }
+    setTimeout(spiralEffect, 20000); // 20s
+
+    // Subliminal messages (46–55 detik)
+    const subliminalWords = ["Nikmati", "Tak Tertahankan", "Ingin Lagi", "Milikilah Sekarang"];
+    for(let i=0;i<8;i++) {
+      setTimeout(()=>{
+        let w = subliminalWords[Math.floor(Math.random()*subliminalWords.length)];
+        subliminal(w, 0.18);
+      }, 46000 + i*800);
+    }
+
+    setTimeout(()=>showText('#teks3',1), 56000); // 56s
+    setTimeout(()=>hideText('#teks3',1), 65000); // 65s
+    setTimeout(()=>showText('#teksLogo',1), 66000); // 66s
+    setTimeout(()=>hideText('#teksLogo',1), 70000); // 70s
+  </script>
+</body>
+</html>
